@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Site Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}</script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .drag-handle{cursor:grab}
+    .field label{display:block;font-size:.75rem;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem}
+    .field input,.field textarea,.field select{width:100%;border:1px solid #e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.875rem;transition:border-color .2s}
+    .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+    .field textarea{resize:vertical;min-height:5rem}
+  </style>
+</head>
+
+<body class="bg-slate-100 font-sans min-h-screen text-slate-800">
+
+<!-- ── TOP BAR ── -->
+<header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+  <div class="flex items-center space-x-3">
+    <div class="bg-gradient-to-br from-blue-600 to-indigo-600 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow">A</div>
+    <div>
+      <h1 class="text-base font-bold text-slate-800 leading-tight">Site Admin</h1>
+      <p class="text-xs text-slate-400">Manage your academic homepage</p>
+    </div>
+  </div>
+  <div class="flex items-center space-x-3">
+    <button onclick="doPreview()" class="flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 hover:bg-slate-50 transition-all">
+      <i data-lucide="eye" class="w-4 h-4"></i><span>Preview</span>
+    </button>
+    <button onclick="doDownload()" class="flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm">
+      <i data-lucide="download" class="w-4 h-4"></i><span>Download data.js</span>
+    </button>
+  </div>
+</header>
+
+<div class="flex">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="w-56 bg-white border-r border-slate-200 min-h-[calc(100vh-57px)] p-4 sticky top-[57px] self-start shrink-0">
+    <nav class="space-y-1" id="sidebar"></nav>
+    <div class="mt-8 p-3 bg-blue-50 rounded-xl text-xs text-blue-700 leading-relaxed">
+      <strong>How it works:</strong><br>
+      Edit content → <em>Download data.js</em> → replace on GitHub → done!
+    </div>
+    <div class="mt-3 p-3 bg-amber-50 rounded-xl text-xs text-amber-700 leading-relaxed">
+      <strong>Images:</strong><br>
+      Put image files in the same folder as index.html. Enter the filename (e.g. <code class="bg-amber-100 px-1 rounded">paper1.jpg</code>) or a full URL.
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="flex-1 p-8 max-w-4xl" id="main"></main>
+
+</div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+
+  /* ── editable data (deep clone) ── */
+  const saved = localStorage.getItem('SITE_DATA');
+  let E = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(SITE));
+
+  let tab = 'profile';
+
+  function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── sidebar ── */
+  const tabs = [
+    { id:'profile',      icon:'user',      label:'Profile' },
+    { id:'news',         icon:'rss',       label:'News' },
+    { id:'publications', icon:'book-open', label:'Publications' },
+    { id:'grants',       icon:'award',     label:'Grants' },
+    { id:'contact',      icon:'mail',      label:'Contact' },
+    { id:'visitormap',   icon:'globe',     label:'Visitor Map' },
+  ];
+
+  function renderSidebar(){
+    document.getElementById('sidebar').innerHTML = tabs.map(t=>`
+      <button data-tab="${t.id}" class="flex items-center space-x-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab===t.id?'bg-blue-600 text-white shadow-md':'text-slate-600 hover:bg-slate-100'}">
+        <i data-lucide="${t.icon}" class="w-4 h-4"></i><span>${t.label}</span>
+      </button>`).join('');
+    lucide.createIcons();
+  }
+
+  document.getElementById('sidebar').addEventListener('click', e=>{
+    const btn = e.target.closest('[data-tab]');
+    if(btn){ tab = btn.dataset.tab; render(); }
+  });
+
+  /* ── render tab content ── */
+  function render(){
+    renderSidebar();
+    const m = document.getElementById('main');
+    switch(tab){
+      case 'profile':      m.innerHTML = profileHTML(); break;
+      case 'news':         m.innerHTML = newsHTML(); break;
+      case 'publications': m.innerHTML = pubsHTML(); break;
+      case 'grants':       m.innerHTML = grantsHTML(); break;
+      case 'contact':      m.innerHTML = contactHTML(); break;
+      case 'visitormap':   m.innerHTML = visitormapHTML(); break;
+    }
+    lucide.createIcons();
+  }
+
+  /* ── PROFILE TAB ── */
+  function profileHTML(){
+    const p = E.profile;
+    return `
+    <h2 class="text-2xl font-bold mb-6">Profile Settings</h2>
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="field"><label>Name</label>
+          <input value="${esc(p.name)}" oninput="E.profile.name=this.value"></div>
+        <div class="field"><label>Title</label>
+          <input value="${esc(p.title)}" oninput="E.profile.title=this.value"></div>
+      </div>
+
+      <div class="field"><label>Affiliation</label>
+        <input value="${esc(p.affiliation)}" oninput="E.profile.affiliation=this.value"></div>
+
+      <div class="field"><label>Photo (filename or URL)</label>
+        <div class="flex gap-2">
+          <input id="prof-photo" value="${esc(p.photo)}" oninput="E.profile.photo=this.value;updImgPreview('prof-photo-preview',this.value)" class="flex-1">
+          <label class="shrink-0 flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-medium cursor-pointer transition-colors">
+            <i data-lucide="image-plus" class="w-3.5 h-3.5"></i><span>Choose file</span>
+            <input type="file" accept="image/*" class="hidden" onchange="pickLocalImg(this,'prof-photo','profile.photo','prof-photo-preview')">
+          </label>
+        </div>
+        <img id="prof-photo-preview" src="${esc(p.photo)}" class="mt-2 h-20 w-20 object-cover rounded-xl border border-slate-200 ${p.photo?'':'hidden'}" onerror="this.classList.add('hidden')" onload="this.classList.remove('hidden')">
+        <p class="text-xs text-slate-400 mt-1">Put image in the same folder as index.html, then enter filename (e.g. profile.jpg)</p>
+      </div>
+
+      <hr class="border-slate-100">
+
+      <div class="field"><label>Welcome Badge Text</label>
+        <input value="${esc(p.welcomeText)}" oninput="E.profile.welcomeText=this.value"></div>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="field"><label>Hero Title (line 1)</label>
+          <input value="${esc(p.heroTitle)}" oninput="E.profile.heroTitle=this.value"></div>
+        <div class="field"><label>Hero Highlight (gradient text)</label>
+          <input value="${esc(p.heroHighlight)}" oninput="E.profile.heroHighlight=this.value"></div>
+      </div>
+
+      <div class="field"><label>Bio (supports HTML: &lt;strong&gt;, &lt;span&gt;, etc.)</label>
+        <textarea rows="4" oninput="E.profile.bio=this.value">${esc(p.bio)}</textarea></div>
+
+      <div class="field"><label>Citation Count (display text, e.g. "130+")</label>
+        <input value="${esc(p.citationCount)}" oninput="E.profile.citationCount=this.value"></div>
+
+      <hr class="border-slate-100">
+      <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wide">Links</h3>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="field"><label>Email</label>
+          <input type="email" value="${esc(p.email)}" oninput="E.profile.email=this.value"></div>
+        <div class="field"><label>Google Scholar URL</label>
+          <input value="${esc(p.scholarUrl)}" oninput="E.profile.scholarUrl=this.value"></div>
+        <div class="field"><label>ORCID URL</label>
+          <input value="${esc(p.orcidUrl)}" oninput="E.profile.orcidUrl=this.value"></div>
+        <div class="field"><label>GitHub URL (optional)</label>
+          <input value="${esc(p.githubUrl)}" oninput="E.profile.githubUrl=this.value"></div>
+      </div>
+
+      <div class="field"><label>Footer Tagline</label>
+        <input value="${esc(p.footerTagline)}" oninput="E.profile.footerTagline=this.value"></div>
+
+    </div>`;
+  }
+
+  /* ── NEWS TAB ── */
+  function newsHTML(){
+    return `
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold">News</h2>
+      <button onclick="addNews()" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all shadow-sm">
+        <i data-lucide="plus" class="w-4 h-4"></i><span>Add News</span>
+      </button>
+    </div>
+    <div class="space-y-4">
+      ${E.news.map((n,i)=>`
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative group">
+        <button onclick="delNews(${i})" class="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+        <div class="grid md:grid-cols-3 gap-4 pr-8">
+          <div class="field"><label>Date</label>
+            <input value="${esc(n.date)}" oninput="E.news[${i}].date=this.value"></div>
+          <div class="field"><label>Tag</label>
+            <input value="${esc(n.tag)}" oninput="E.news[${i}].tag=this.value" placeholder="Accepted / Preprint / Published"></div>
+          <div class="field"><label>Image (filename or URL)</label>
+            <div class="flex gap-2">
+              <input id="news-img-${i}" value="${esc(n.image)}" oninput="E.news[${i}].image=this.value;updImgPreview('news-img-prev-${i}',this.value)" class="flex-1">
+              <label class="shrink-0 flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-medium cursor-pointer transition-colors">
+                <i data-lucide="image-plus" class="w-3.5 h-3.5"></i><span>File</span>
+                <input type="file" accept="image/*" class="hidden" onchange="pickLocalImg(this,'news-img-${i}','news.${i}.image','news-img-prev-${i}')">
+              </label>
+            </div>
+            <img id="news-img-prev-${i}" src="${esc(n.image)}" class="mt-1.5 h-16 rounded-lg border border-slate-200 ${n.image?'':'hidden'}" onerror="this.classList.add('hidden')" onload="this.classList.remove('hidden')">
+          </div>
+        </div>
+        <div class="field mt-4"><label>Content (supports HTML)</label>
+          <textarea rows="2" oninput="E.news[${i}].content=this.value">${esc(n.content)}</textarea></div>
+      </div>`).join('')}
+    </div>
+    ${E.news.length===0?'<p class="text-slate-400 text-sm italic mt-4">No news items yet. Click "Add News" to create one.</p>':''}`;
+  }
+
+  /* ── PUBLICATIONS TAB ── */
+  function pubsHTML(){
+    return `
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold">Publications</h2>
+      <button onclick="addPub()" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all shadow-sm">
+        <i data-lucide="plus" class="w-4 h-4"></i><span>Add Publication</span>
+      </button>
+    </div>
+    <div class="space-y-4">
+      ${E.publications.map((p,i)=>`
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative group">
+        <button onclick="delPub(${i})" class="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+        <div class="field mb-4 pr-8"><label>Title</label>
+          <input value="${esc(p.title)}" oninput="E.publications[${i}].title=this.value"></div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="field"><label>Authors</label>
+            <input value="${esc(p.authors)}" oninput="E.publications[${i}].authors=this.value"></div>
+          <div class="field"><label>Venue</label>
+            <input value="${esc(p.venue)}" oninput="E.publications[${i}].venue=this.value"></div>
+        </div>
+        <div class="grid md:grid-cols-4 gap-4 mt-4">
+          <div class="field"><label>Year</label>
+            <input type="number" value="${p.year||''}" oninput="E.publications[${i}].year=+this.value"></div>
+          <div class="field"><label>Citations</label>
+            <input type="number" value="${p.citations||0}" oninput="E.publications[${i}].citations=+this.value"></div>
+          <div class="field"><label>Tags (comma-separated)</label>
+            <input value="${esc((p.tags||[]).join(', '))}" oninput="E.publications[${i}].tags=this.value.split(',').map(t=>t.trim()).filter(Boolean)"></div>
+          <div class="field"><label>DOI / Link</label>
+            <input value="${esc(p.link)}" oninput="E.publications[${i}].link=this.value"></div>
+        </div>
+        <div class="field mt-4"><label>Cover Image (filename or URL)</label>
+          <div class="flex gap-2">
+            <input id="pub-img-${i}" value="${esc(p.image)}" oninput="E.publications[${i}].image=this.value;updImgPreview('pub-img-prev-${i}',this.value)" class="flex-1">
+            <label class="shrink-0 flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-medium cursor-pointer transition-colors">
+              <i data-lucide="image-plus" class="w-3.5 h-3.5"></i><span>File</span>
+              <input type="file" accept="image/*" class="hidden" onchange="pickLocalImg(this,'pub-img-${i}','publications.${i}.image','pub-img-prev-${i}')">
+            </label>
+          </div>
+          <img id="pub-img-prev-${i}" src="${esc(p.image)}" class="mt-1.5 h-16 rounded-lg border border-slate-200 ${p.image?'':'hidden'}" onerror="this.classList.add('hidden')" onload="this.classList.remove('hidden')">
+        </div>
+      </div>`).join('')}
+    </div>
+    ${E.publications.length===0?'<p class="text-slate-400 text-sm italic mt-4">No publications yet.</p>':''}`;
+  }
+
+  /* ── GRANTS TAB ── */
+  function grantsHTML(){
+    return `
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold">Grants & Projects</h2>
+      <button onclick="addGrant()" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all shadow-sm">
+        <i data-lucide="plus" class="w-4 h-4"></i><span>Add Grant</span>
+      </button>
+    </div>
+    <div class="space-y-4">
+      ${E.grants.map((g,i)=>`
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative group">
+        <button onclick="delGrant(${i})" class="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+        <div class="field mb-4 pr-8"><label>Title</label>
+          <input value="${esc(g.title)}" oninput="E.grants[${i}].title=this.value"></div>
+        <div class="grid md:grid-cols-5 gap-4">
+          <div class="field"><label>Role</label>
+            <input value="${esc(g.role)}" oninput="E.grants[${i}].role=this.value" placeholder="PI / Key Member / Participant"></div>
+          <div class="field"><label>Period</label>
+            <input value="${esc(g.period)}" oninput="E.grants[${i}].period=this.value" placeholder="2024 - 2026"></div>
+          <div class="field"><label>Funding Agency</label>
+            <input value="${esc(g.agency)}" oninput="E.grants[${i}].agency=this.value"></div>
+          <div class="field"><label>Amount</label>
+            <input value="${esc(g.amount)}" oninput="E.grants[${i}].amount=this.value" placeholder="HK$500,000"></div>
+          <div class="field"><label>Status</label>
+            <select oninput="E.grants[${i}].status=this.value">
+              <option value="Ongoing" ${g.status==='Ongoing'?'selected':''}>Ongoing</option>
+              <option value="Completed" ${g.status==='Completed'?'selected':''}>Completed</option>
+            </select></div>
+        </div>
+        <div class="field mt-4"><label>Cover Image (filename or URL)</label>
+          <div class="flex gap-2">
+            <input id="grant-img-${i}" value="${esc(g.image)}" oninput="E.grants[${i}].image=this.value;updImgPreview('grant-img-prev-${i}',this.value)" class="flex-1">
+            <label class="shrink-0 flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-medium cursor-pointer transition-colors">
+              <i data-lucide="image-plus" class="w-3.5 h-3.5"></i><span>File</span>
+              <input type="file" accept="image/*" class="hidden" onchange="pickLocalImg(this,'grant-img-${i}','grants.${i}.image','grant-img-prev-${i}')">
+            </label>
+          </div>
+          <img id="grant-img-prev-${i}" src="${esc(g.image)}" class="mt-1.5 h-16 rounded-lg border border-slate-200 ${g.image?'':'hidden'}" onerror="this.classList.add('hidden')" onload="this.classList.remove('hidden')">
+        </div>
+      </div>`).join('')}
+    </div>
+    ${E.grants.length===0?'<p class="text-slate-400 text-sm italic mt-4">No grants yet.</p>':''}`;
+  }
+
+  /* ── CONTACT TAB ── */
+  function contactHTML(){
+    if(!E.contact) E.contact = { email:'', location:'', office:'', phone:'', note:'' };
+    const c = E.contact;
+    return `
+    <h2 class="text-2xl font-bold mb-6">Contact Information</h2>
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="field"><label>Email</label>
+          <input type="email" value="${esc(c.email)}" oninput="E.contact.email=this.value"></div>
+        <div class="field"><label>Phone (optional)</label>
+          <input value="${esc(c.phone)}" oninput="E.contact.phone=this.value" placeholder="+852 1234 5678"></div>
+      </div>
+      <div class="field"><label>Location / Address</label>
+        <input value="${esc(c.location)}" oninput="E.contact.location=this.value" placeholder="Department, University, City, Country"></div>
+      <div class="field"><label>Office / Room (optional)</label>
+        <input value="${esc(c.office)}" oninput="E.contact.office=this.value" placeholder="Room 6-123, Academic Building 1"></div>
+      <div class="field"><label>Note (shown above contact cards)</label>
+        <textarea rows="2" oninput="E.contact.note=this.value">${esc(c.note)}</textarea></div>
+    </div>`;
+  }
+
+  /* ── VISITOR MAP TAB ── */
+  function visitormapHTML(){
+    if(!E.visitorMap) E.visitorMap = { enabled:true, embedHtml:'' };
+    const v = E.visitorMap;
+    return `
+    <h2 class="text-2xl font-bold mb-6">Visitor Map</h2>
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="font-bold text-slate-800">Enable Visitor Map</div>
+          <div class="text-sm text-slate-500">Show a world map with visitor locations</div>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" ${v.enabled?'checked':''} onchange="E.visitorMap.enabled=this.checked" class="sr-only peer">
+          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+        </label>
+      </div>
+      <hr class="border-slate-100">
+      <div class="field">
+        <label>Embed Code (paste from ClustrMaps or RevolverMaps)</label>
+        <textarea rows="6" oninput="E.visitorMap.embedHtml=this.value" placeholder="Paste your ClustrMaps or RevolverMaps embed code here...">${esc(v.embedHtml)}</textarea>
+      </div>
+      <div class="bg-blue-50 rounded-xl p-4 text-sm text-blue-700 space-y-3">
+        <p class="font-bold">How to get your visitor map widget:</p>
+        <div class="space-y-2">
+          <div>
+            <strong>Option A — ClustrMaps</strong> (recommended):
+            <ol class="list-decimal ml-4 mt-1 space-y-0.5 text-blue-600">
+              <li>Go to <a href="https://clustrmaps.com/add" target="_blank" class="underline">clustrmaps.com/add</a></li>
+              <li>Enter your GitHub Pages URL</li>
+              <li>Choose a widget style (Map / Globe)</li>
+              <li>Copy the embed code and paste above</li>
+            </ol>
+          </div>
+          <div>
+            <strong>Option B — RevolverMaps</strong> (3D globe):
+            <ol class="list-decimal ml-4 mt-1 space-y-0.5 text-blue-600">
+              <li>Go to <a href="https://www.revolvermaps.com" target="_blank" class="underline">revolvermaps.com</a></li>
+              <li>Choose a style and click "Get your map"</li>
+              <li>Copy the embed code and paste above</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  /* ── CRUD helpers ── */
+  window.addNews = ()=>{ E.news.unshift({ date:'', tag:'Accepted', content:'', image:'' }); render(); };
+  window.delNews = i=>{ if(confirm('Delete this news item?')){ E.news.splice(i,1); render(); }};
+
+  window.addPub = ()=>{ E.publications.unshift({ title:'', authors:'', venue:'', year:new Date().getFullYear(), citations:0, tags:[], link:'', image:'' }); render(); };
+  window.delPub = i=>{ if(confirm('Delete this publication?')){ E.publications.splice(i,1); render(); }};
+
+  window.addGrant = ()=>{ E.grants.unshift({ title:'', role:'', period:'', agency:'', amount:'', status:'Ongoing', image:'' }); render(); };
+  window.delGrant = i=>{ if(confirm('Delete this grant?')){ E.grants.splice(i,1); render(); }};
+
+  /* ── export ── */
+  function generateJS(){
+    const header = [
+      '// ============================================================',
+      '//  data.js \u2014 All site content in one place',
+      '//  Edit this file (or use admin.html) then commit & refresh',
+      '// ============================================================',
+      ''
+    ].join('\n');
+    return header + 'const SITE = ' + JSON.stringify(E, null, 2) + ';\n';
+  }
+
+  window.doDownload = ()=>{
+    const blob = new Blob([generateJS()], { type:'application/javascript' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'data.js';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  window.doPreview = ()=>{
+    localStorage.setItem('SITE_DATA', JSON.stringify(E));
+    window.open('index.html', '_blank');
+  };
+
+  /* ── image helpers ── */
+  window.updImgPreview = (previewId, src) => {
+    const img = document.getElementById(previewId);
+    if(!img) return;
+    if(src){ img.src = src; img.classList.remove('hidden'); }
+    else { img.classList.add('hidden'); }
+  };
+
+  window.pickLocalImg = (fileInput, textInputId, dataPath, previewId) => {
+    const file = fileInput.files[0];
+    if(!file) return;
+    const fname = file.name;
+    const textInput = document.getElementById(textInputId);
+    if(textInput) textInput.value = fname;
+
+    const parts = dataPath.split('.');
+    let obj = E;
+    for(let i=0; i<parts.length-1; i++) obj = obj[parts[i]];
+    obj[parts[parts.length-1]] = fname;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const prev = document.getElementById(previewId);
+      if(prev){ prev.src = ev.target.result; prev.classList.remove('hidden'); }
+    };
+    reader.readAsDataURL(file);
+
+    showToast('\u{1F4E2} Remember to copy "' + fname + '" into the homepage folder!');
+  };
+
+  window.showToast = (msg) => {
+    let t = document.getElementById('toast');
+    if(!t){ t = document.createElement('div'); t.id='toast'; t.className='fixed bottom-6 right-6 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium transition-all duration-300 opacity-0 translate-y-4 z-[999]'; document.body.appendChild(t); }
+    t.textContent = msg;
+    t.classList.remove('opacity-0','translate-y-4');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=>{ t.classList.add('opacity-0','translate-y-4'); }, 4000);
+  };
+
+  /* ── expose E globally for oninput handlers ── */
+  window.E = E;
+
+  /* ── init ── */
+  render();
+
+})();
+</script>
+</body>
+</html>
