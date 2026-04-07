@@ -52,7 +52,17 @@
 <!-- ─── FOOTER ─── -->
 <footer id="footer" class="bg-slate-900 text-slate-400 py-12 px-6"></footer>
 
-<script src="data.js?v=__BUILD_SHA__"></script>
+<script>
+  // Cache-busting loader for data.js.
+  // If GitHub Actions replaces __BUILD_SHA__, we use it; otherwise fall back to a timestamp.
+  (function () {
+    const build = "__BUILD_SHA__";
+    const v = (build && build !== "__BUILD_SHA__") ? build : String(Date.now());
+    const s = document.createElement("script");
+    s.src = "data.js?v=" + encodeURIComponent(v);
+    document.head.appendChild(s);
+  })();
+</script>
 <script>
 (function(){
   /* ── data source: admin preview (localStorage) → data.js default ── */
