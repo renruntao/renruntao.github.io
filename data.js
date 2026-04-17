@@ -76,7 +76,7 @@ const SITE = {
   ],
   "visitorMap": {
     "enabled": true,
-    "embedHtml": ""
+    "embedHtml": "<script type=\"text/javascript\" id=\"mapmyvisitors\" src=\"//mapmyvisitors.com/map.js?d=bTOBa6-Y762tr6vZjdXQ-78aTv2T-a2wjIMLKIuRjoE&cl=ffffff&w=a\"></script>"
   },
   "contact": {
     "email": "runtaoren2-c@my.cityu.edu.hk<br>runtao.ren@minesparis.psl.eu",
